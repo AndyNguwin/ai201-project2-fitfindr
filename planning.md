@@ -41,7 +41,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
 - `new_item` (dict): a specific clothing item listing that the user doesn't own yet
-- `wardrobe` (dict): all of the clothing items that the user has in their wardrobe to match/style with the new item
+- `wardrobe` (dict): all of the clothing items (associated to the "items" key) that the user has in their wardrobe to match/style with the new item
 
 **What it returns:**
 <!-- Describe the return value -->
