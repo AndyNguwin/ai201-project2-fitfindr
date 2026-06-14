@@ -27,6 +27,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 **What it returns:**
 <!-- Describe the return value — what fields does a result contain? -->
 - The tool will return a list of item listings that match the filters ranked by relevancy. Each item listing is represented as a dictionary with information/metadata relating to the listing (as shown in the listings.json).
+
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if no listings match? -->
 - If there was an error with the tool call, the agent should analyze the parameters it used with the tool and verify it used the correct parameters. It should retry the tool call if it needs to correct its parameters. If the parameters were correct and it returned an empty list of listings, then the agent will immediately stop the loop and tell the user that there were no listings that match the description they gave.
@@ -46,6 +47,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 **What it returns:**
 <!-- Describe the return value -->
 - The tool will return a string describing an outfit that uses the specified new clothing item and the user's wardrobe. If the wardrobe is empty, the tool will return styling tips for the new item instead of outfits.
+
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
 -  If the wardrobe is empty or if no outfit can be suggested, the tool will return styling tips for the new item instead of outfits.
