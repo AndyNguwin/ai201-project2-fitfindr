@@ -131,9 +131,9 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | |
-| suggest_outfit | Wardrobe is empty | |
-| create_fit_card | Outfit input is missing or incomplete | |
+| search_listings | No results match the query | Say it couldn't find any match and suggest another search. |
+| suggest_outfit | Wardrobe is empty | Suggest styling advice for the item instead of outfits. |
+| create_fit_card | Outfit input is missing or incomplete | Say there isn't an outfit to make a caption for yet. Ask to style an outfit first or have them describe it. |
 
 ---
 
