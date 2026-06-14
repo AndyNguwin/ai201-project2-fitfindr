@@ -105,6 +105,23 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **How does information from one tool get passed to the next?**
 <!-- Describe how your agent stores and accesses state within a session. What data is tracked? How is it passed between tool calls? -->
+- The session state will have update information after each call as there is an order of how the tools should be called.
+- `query` (string of user query)
+     - Will be loaded in already on session creation. 
+- `parsed` (dictionary with parsed information in query)
+     - Will be accessed for `search_listings()` to filter listings
+- `wardrobe` (dictionary with a list of items associated to the key "items")
+     - Will be loaded in already on session creation; will be accessed for `suggest_outfit()`
+- `search_results` (list of dictionaries of item listing information)
+     - Will be set to result of `search_listings()`.
+- `selected_item` (dictionary with the item listing information)
+     - Will be set to top/first item in result of `search_listings()`, get's accessed for `suggest_outfit()` and `create_fit_card()`
+- `outfit_suggestion` (string describing the outfit)
+     - Will be set to result of `suggest_outfit()`, get's accessed for `create_fit_card()`
+- `fit_card` (string representing caption that describes outfit and selected item)
+     - Will be set to result of `create_fit_card()`.
+- `error` (string describing error in loop)
+     - Will be set whenever there's an error in calling tools in the loop
 
 ---
 
