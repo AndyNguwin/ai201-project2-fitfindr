@@ -206,7 +206,7 @@ Write out what a full user interaction looks like from start to finish — tool 
 
 **Step 1:**
 <!-- What does the agent do first? Which tool is called? With what input? -->
-- The agent needs to first search the available listings for what the user wants to look for using the `search_listings()` function with the description of "vintage graphic tee" and max_price of 30.
+- The agent needs to first search the available listings for what the user wants to look for by parsing the query message for arguments to use with `search_listings()` function. It will call `search_listings()` with the description of "vintage graphic tee" and max_price of 30.
 
 **Step 2:**
 <!-- What happens next? What was returned from step 1? What tool is called now? -->
