@@ -36,7 +36,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
-- This tool will curate and suggest 1 or 2 outfits for the user using a specific clothing item listing with the rest of the user's wardrobe.
+- This tool will curate and suggest an outfit for the user using a specific clothing item listing with the rest of the user's wardrobe.
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
@@ -45,7 +45,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it returns:**
 <!-- Describe the return value -->
-- The tool will return a string describing 1-2 outfits that uses the specified new clothing item and the user's wardrobe. If the wardrobe is empty, the tool will return styling tips for the new item instead of outfits.
+- The tool will return a string describing an outfit that uses the specified new clothing item and the user's wardrobe. If the wardrobe is empty, the tool will return styling tips for the new item instead of outfits.
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
 -  If the wardrobe is empty or if no outfit can be suggested, the tool will return styling tips for the new item instead of outfits.
@@ -55,7 +55,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
-- The tool will create a short caption describing the provided outfit string, which will mention the clothing items.
+- The tool will create a short caption describing the provided outfit string, which will mention the clothing items used and highlights the selected item that was searched for.
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
@@ -83,6 +83,20 @@ You must have at least 3 tools. The three required tools are listed — add any 
 **How does your agent decide which tool to call next?**
 <!-- Describe the logic your planning loop uses. What does it look at? What conditions change its behavior? How does it know when it's done? -->
 
+- Based on the user's message, the agent will decide which tools it needs to use.
+     - Search for an item from a description? `search_listings()`
+     - Create an outfit after finding an item? `search_listing()` -> `suggest_outfits()`
+     - Make a caption of a created outfit after finding an item to share on social media? `search_listing()` -> `suggest_outfits()` -> `create_fit_card()`
+- If asked to search for an item from a description, the agent will call `search_listings()`
+     - Before: agent must check if information of what to search for was provided to call with the tool.
+     - After: agent checks if the results were empty. If it was empty, it should verify it called the tool correctly and that the empty result is valid. If not, it will recall. If it called it correctly and had the empty result, it must set an error message in the session state and return early. If the were results, it will set the selected item as the first item in the returned results because that is the best ranked match to the user query.
+- If asked to suggest/style outfits in the user query, it will then call `suggest_outfits()` after it called `search_listing()`.
+     - Before: agent will check the session has a selected item.
+     - After: agent will check if the result is empty or not. If the result was empty, it should verify it called the tool correctly and that the empty result is valid. It will recall if it called wrong initially, else it will set the error message for the session and return early. If there are results, it will set the outfit_suggestion in the session as the returned string.
+- If asked to create short and shareable captions of the outfits in the user query, it will then call `screate_fit_card()` after it called `suggest_outfits()`.
+     - Before: agent will check the session has an outfit suggestions.
+     - After: agent will check if the result is empty or not. If the result was empty, it should verify it called the tool correctly and that the empty result is valid. It will recall if it called wrong initially, else it will set the error message for the session and return early. If there are results, it will set the fit_card in the session as the returned string.
+- The session will be returned at the end. 
 ---
 
 ## State Management
@@ -137,7 +151,7 @@ For each tool, describe the specific failure mode you're handling and what the a
 ---
 
 ## A Complete Interaction (Step by Step)
-- FitFindr is capable of searching for item listings based on a description provided by the user, suggest outfits with the listings and the user's wardrobe, and create a short captions describing the outfits and listed items to share on social media. If the user asks to search for items, suggest outfits, and create captions, the agent needs to call tools in the order of `search_listings()` -> `suggest_outfit()` for the found listings -> `create_fit_card()` for the suggested outfits. If there were no valid listings found, the agent will say so and immediately stop in the flow rather than continue to the two other tools. If the wardrobe is empty, the agent will just provide suggestions on how to style with the clothing item listings instead of outfits.
+- FitFindr is capable of searching for an item listing based on a description provided by the user, suggest an outfit with the listing and the user's wardrobe, and create a short caption describing the outfit and listed item to share on social media. If the user asks to search for a clothing item, suggest outfit, and create caption, the agent needs to call tools in the order of `search_listings()` -> `suggest_outfit()` for the selected listing -> `create_fit_card()` for the suggested outfit. If there were no valid listings found, the agent will say so and immediately stop in the flow rather than continue to the two other tools. If the wardrobe is empty, the agent will just provide suggestions on how to style with the clothing item listings instead of outfits.
 
 Write out what a full user interaction looks like from start to finish — tool call by tool call. Use a specific example query.
 
@@ -149,12 +163,12 @@ Write out what a full user interaction looks like from start to finish — tool 
 
 **Step 2:**
 <!-- What happens next? What was returned from step 1? What tool is called now? -->
-- Assuming the tools work correctly, `search_listings()` will return back a list of item listings (represented as dictionaries) that relate to the query/filtering asked for. For each item listing, the agent will then call `suggest_outfit()` to help the user style with the items found with what they have in their wardrobe. The input will be each item listing dictionary and the user's wardrobe which is already accessible and represented as a dictionary too. If the listings was empty, the agent won't suggest outfits and asks the user for something else to search for. If the wardrobe is empty, the agent will suggest styling tips for the clothing item listings rather than outfits.
+- Assuming the tools work correctly, `search_listings()` will return back a list of item listings (represented as dictionaries) that relate to the query/filtering asked for. The best match will be listed first, so the agent chooses the first item listing, then the agent will  call `suggest_outfit()` to help the user style with the selected item with what they have in their wardrobe. The input will be each item listing dictionary and the user's wardrobe which is already accessible and represented as a dictionary too. If there is not selected clothing listing, the agent won't suggest outfits and asks the user for something else to search for. If the wardrobe is empty, the agent will suggest styling tips for the clothing item listing rather than an outfit.
 
 **Step 3:**
 <!-- Continue until the full interaction is complete -->
-- `suggest_outfit()` returns back a string that describes the completed outfit(s) that uses an item listing related to the user's query with their wardrobe. The agent will continue calling `suggest_outfit()` with all of searched listings and update the managed state.
+- `suggest_outfit()` returns back a string that describes the completed outfit that uses the item listing best matched to the user's query with their wardrobe.
 
 **Final output to user:**
 <!-- What does the user actually see at the end? -->
-- At the end, if there were listings that match their search, the user will see a list of item listings and matching suggested outfits using the user's wardrobe. At the end, the agent can ask the user if they would like ideas for captions to describe the suggested outfits and items for social media, and it will call `create_fit_card()` if so.
+- At the end, if there were listings that match their search, the user will see an item listing that best matches what they asked for and a suggested outfit using the user's wardrobe and the clothing item. At the end, the agent can ask the user if they would like a caption to describe the suggested outfit and clothing item for social media, and it will call `create_fit_card()` if so.
