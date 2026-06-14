@@ -154,7 +154,7 @@ For each tool, describe the specific failure mode you're handling and what the a
 
           subgraph loop[Planning Loop]
                direction TB
-               parse[parse_query] -->|"parsed: description, size, max_price"| search
+               parse[parse_query] -->|"parsed: {description, size, max_price}"| search
                search["search_listings(description, size, max_price)"]
                search -->|"results = []"| ERR["set error: 'No listings found...'"]
                search -->|"results = [item, ...]"| save_results["search_results = results"]
