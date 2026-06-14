@@ -148,6 +148,34 @@ For each tool, describe the specific failure mode you're handling and what the a
      sketch are all fine. You'll share this diagram with an AI tool when asking it to implement
      the planning loop and each individual tool. -->
 
+```mermaid
+     flowchart TD
+          query[User query + wardrobe] --> parse
+
+          subgraph loop[Planning Loop]
+               direction TB
+               parse[parse_query] -->|"parsed: description, size, max_price"| search
+               search["search_listings(description, size, max_price)"]
+               search -->|"results = []"| ERR["set error: 'No listings found...'"]
+               search -->|"results = [item, ...]"| select["selected_item = results[0]"]
+
+               select --> suggest["suggest_outfit(selected_item, wardrobe)"]
+               suggest -->|"wardrobe empty"| tips["styling tips instead of outfit"]
+               suggest -->|"wardrobe has items"| outfit["outfit_suggestion = '...'"]
+               tips --> outfit
+
+               outfit --> fit["create_fit_card(outfit_suggestion, selected_item)"]
+               fit -->|"caption failed / outfit empty"| ERR2["set error: 'Couldn't create a fit card...'"]
+               fit -->|"fit_card = '...'"| DONE[Return session]
+               ERR --> DONE
+               ERR2 --> DONE
+          end
+
+          DONE --> result[listing / outfit / fit card → user]
+
+          loop <-.->|read / write| session[("Session state:<br/>query, parsed, search_results,<br/>selected_item, wardrobe,<br/>outfit_suggestion, fit_card, error")]
+```
+
 ---
 
 ## AI Tool Plan
