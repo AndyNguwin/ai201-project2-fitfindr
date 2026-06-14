@@ -55,16 +55,20 @@ You must have at least 3 tools. The three required tools are listed — add any 
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
+- The tool will create a short caption describing the provided outfit string, which will mention the clothing items.
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
-- `outfit` (...): ...
+- `outfit` (str): a string to describe the outfit, containing the clothing items to style the outfit
+- `new_item` (dict): a dictionary containing the information/metadata of a clothing item listing that the outfit is styled around
 
 **What it returns:**
 <!-- Describe the return value -->
+- The tool returns a 2-4 sentence caption that describes the outfit and highlights the new item the outfit was styled around. The caption is meant to be shareable and can be used for social media like Instagram/Tiktok. If the outfit data is missing/empty, it will just say that the information on the outfit is missing.
 
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the outfit data is incomplete? -->
+- If the outfit is missing or empty, the agent will not create a caption. It will need to check if it can call the tool again with an actual outfit string. If not, the agent should ask for a description of the outfit.
 
 ---
 
