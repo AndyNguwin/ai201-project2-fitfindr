@@ -157,7 +157,8 @@ For each tool, describe the specific failure mode you're handling and what the a
                parse[parse_query] -->|"parsed: description, size, max_price"| search
                search["search_listings(description, size, max_price)"]
                search -->|"results = []"| ERR["set error: 'No listings found...'"]
-               search -->|"results = [item, ...]"| select["selected_item = results[0]"]
+               search -->|"results = [item, ...]"| save_results["search_results = results"]
+               save_results --> select["selected_item = search_results[0]"]
 
                select --> suggest["suggest_outfit(selected_item, wardrobe)"]
                suggest -->|"wardrobe empty"| tips["styling tips instead of outfit"]
