@@ -276,16 +276,59 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     - Capture the outfit vibe in specific terms
     - Sound different each time for different inputs (use higher LLM temperature)
 
-    TODO:
-        1. Guard against an empty or whitespace-only outfit string.
-        2. Build a prompt that gives the LLM the item details and the outfit,
-           and asks for a caption matching the style guidelines above.
-        3. Call the LLM and return the response.
-
-    Before writing code, fill in the Tool 3 section of planning.md.
+    On any failure — a missing/blank outfit string, an LLM/API error, or an empty
+    model response — returns a descriptive error string prefixed with ERROR_PREFIX
+    rather than raising an exception.
     """
-    # Replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return f"{ERROR_PREFIX} I couldn't create a fit card because no outfit was provided."
+    if not new_item:
+        return f"{ERROR_PREFIX} I couldn't create a fit card because no item was provided."
+
+    title = new_item.get("title", "this piece")
+    price = new_item.get("price")
+    price_text = f"${price:.0f}" if isinstance(price, (int, float)) else "a steal"
+    platform = new_item.get("platform", "online")
+
+    prompt = (
+        "Write a short, shareable outfit caption for a social media post (Instagram/TikTok) "
+        "about a secondhand fashion find.\n\n"
+        "The thrifted item:\n"
+        f"{_format_item(new_item)}\n"
+        f"- Price: {price_text}\n"
+        f"- Platform: {platform}\n\n"
+        "The outfit it's styled in:\n"
+        f"{outfit}\n\n"
+        "Guidelines:\n"
+        "- Short, casual and authentic like a real OOTD post (not a product description).\n"
+        f"- Mention the item name ('{title}'), its price ({price_text}), and the platform "
+        f"({platform}) naturally, once each.\n"
+        "- Capture the outfit's vibe in specific terms.\n"
+        "- Return only the caption text, no preamble or quotation marks."
+    )
+
+    try:
+        client = _get_groq_client()
+        response = client.chat.completions.create(
+            model=_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You write fun, authentic outfit captions for secondhand fashion "
+                        "finds — the kind a real person posts with their OOTD."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.95,
+        )
+        result = (response.choices[0].message.content or "").strip()
+        if not result:
+            return f"{ERROR_PREFIX} I couldn't write a fit card caption right now. Please try again."
+        return result
+    except Exception:
+        return f"{ERROR_PREFIX} I ran into a problem creating the fit card. Please try again."
 
 
 # ── Manual tests ──────────────────────────────────────────────────────────────
@@ -319,8 +362,8 @@ if __name__ == "__main__":
     print("--- With example wardrobe ---\n", suggest_outfit(item, get_example_wardrobe()), "\n")
     print("--- With empty wardrobe ---\n", suggest_outfit(item, get_empty_wardrobe()), "\n")
 
-    # ── Tool 3: create_fit_card ── (uncomment once implemented)
-    # print("\n##### create_fit_card #####\n")
-    # outfit = suggest_outfit(item, get_example_wardrobe())
-    # print(create_fit_card(outfit, item), "\n")
-    # print("Empty outfit guard:\n", create_fit_card("", item), "\n")
+    # ── Tool 3: create_fit_card ──
+    print("\n##### create_fit_card #####\n")
+    outfit = suggest_outfit(item, get_example_wardrobe())
+    print("--- Caption ---\n", create_fit_card(outfit, item), "\n")
+    print("--- Empty outfit guard ---\n", create_fit_card("", item), "\n")
