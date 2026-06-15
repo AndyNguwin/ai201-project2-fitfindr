@@ -22,6 +22,13 @@ from utils.data_loader import load_listings
 
 load_dotenv()
 
+# Groq model used by the LLM-backed tools.
+_MODEL = "llama-3.3-70b-versatile"
+
+# Prefix that marks a tool's return value as an error message rather than a real
+# result. The planning loop checks for this to decide whether a tool succeeded.
+ERROR_PREFIX = "ERROR:"
+
 
 # ── Groq client ───────────────────────────────────────────────────────────────
 
@@ -149,6 +156,39 @@ def search_listings(
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
 
+def _format_item(item: dict) -> str:
+    """Format a listing dict into a readable block for the prompt."""
+    tags = ", ".join(item.get("style_tags", []))
+    colors = ", ".join(item.get("colors", []))
+    brand = item.get("brand") or "unbranded"
+    return (
+        f"- Title: {item.get('title', 'Unknown item')}\n"
+        f"- Category: {item.get('category', 'n/a')}\n"
+        f"- Colors: {colors or 'n/a'}\n"
+        f"- Style tags: {tags or 'n/a'}\n"
+        f"- Brand: {brand}\n"
+        f"- Description: {item.get('description', '')}"
+    )
+
+
+def _format_wardrobe(items: list[dict]) -> str:
+    """Format wardrobe items into a numbered list for the prompt."""
+    lines = []
+    for w in items:
+        tags = ", ".join(w.get("style_tags", []))
+        colors = ", ".join(w.get("colors", []))
+        note = w.get("notes")
+        line = (
+            f"- {w.get('name', 'Unnamed piece')} "
+            f"({w.get('category', 'n/a')}; colors: {colors or 'n/a'}; "
+            f"style: {tags or 'n/a'})"
+        )
+        if note:
+            line += f" — {note}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     """
     Given a thrifted item and the user's wardrobe, suggest 1–2 complete outfits.
@@ -159,23 +199,60 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
                   wardrobe item dicts. May be empty — handle this gracefully.
 
     Returns:
-        A non-empty string with outfit suggestions.
-        If the wardrobe is empty, offer general styling advice for the item
-        rather than raising an exception or returning an empty string.
-
-    TODO:
-        1. Check whether wardrobe['items'] is empty.
-        2. If empty: call the LLM with a prompt for general styling ideas
-           (what kinds of items pair well, what vibe it suits, etc.).
-        3. If not empty: format the wardrobe items into a prompt and ask
-           the LLM to suggest specific outfit combinations using the new item
-           and named pieces from the wardrobe.
-        4. Return the LLM's response as a string.
-
-    Before writing code, fill in the Tool 2 section of planning.md.
+        A non-empty string with outfit suggestions (or general styling advice
+        when the wardrobe is empty). On any failure — missing input, LLM/API
+        error, or an empty model response — returns a descriptive error string
+        rather than raising an exception.
     """
-    # Replace this with your implementation
-    return ""
+    if not new_item:
+        return f"{ERROR_PREFIX} I couldn't suggest an outfit because no item was provided."
+
+    items = (wardrobe or {}).get("items", [])
+
+    if items:
+        # Wardrobe has pieces — ask for concrete outfits using named items.
+        prompt = (
+            "A shopper is considering this secondhand item:\n"
+            f"{_format_item(new_item)}\n\n"
+            "Here is their current wardrobe:\n"
+            f"{_format_wardrobe(items)}\n\n"
+            "Suggest 1 complete outfit that pair the new item with specific "
+            "pieces from their wardrobe. Refer to wardrobe pieces by name, explain "
+            "briefly why each outfit works, and keep it concise and practical."
+        )
+    else:
+        # Empty wardrobe — give general styling advice for the item alone.
+        prompt = (
+            "A shopper is considering this secondhand item:\n"
+            f"{_format_item(new_item)}\n\n"
+            "They haven't entered a wardrobe yet. Give general styling advice for "
+            "this piece: what kinds of items pair well with it, good color "
+            "combinations, and what vibes or occasions it suits. Keep it concise "
+            "and practical."
+        )
+
+    try:
+        client = _get_groq_client()
+        response = client.chat.completions.create(
+            model=_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a thoughtful personal stylist who specializes in "
+                        "secondhand and vintage fashion."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+        )
+        result = (response.choices[0].message.content or "").strip()
+        if not result:
+            return f"{ERROR_PREFIX} I couldn't put together an outfit suggestion right now. Please try again."
+        return result
+    except Exception:
+        return f"{ERROR_PREFIX} I ran into a problem suggesting an outfit. Please try again."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -235,11 +312,12 @@ if __name__ == "__main__":
     _print_listings("no-results test (designer ballgown XXS under $5)",
                     search_listings("designer ballgown", size="XXS", max_price=5))
 
-    # ── Tool 2: suggest_outfit ── (uncomment once implemented)
-    # print("\n##### suggest_outfit #####\n")
-    # item = search_listings("vintage graphic tee", max_price=30)[0]
-    # print("With example wardrobe:\n", suggest_outfit(item, get_example_wardrobe()), "\n")
-    # print("With empty wardrobe:\n", suggest_outfit(item, get_empty_wardrobe()), "\n")
+    # ── Tool 2: suggest_outfit ──
+    print("\n##### suggest_outfit #####\n")
+    item = search_listings("vintage graphic tee", max_price=30)[0]
+    print(f"(styling item: {item['title']})\n")
+    print("--- With example wardrobe ---\n", suggest_outfit(item, get_example_wardrobe()), "\n")
+    print("--- With empty wardrobe ---\n", suggest_outfit(item, get_empty_wardrobe()), "\n")
 
     # ── Tool 3: create_fit_card ── (uncomment once implemented)
     # print("\n##### create_fit_card #####\n")
