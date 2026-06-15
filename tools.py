@@ -13,6 +13,7 @@ Tools:
 """
 
 import os
+import re
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -35,6 +36,63 @@ def _get_groq_client():
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
+
+# Common words that carry no search signal — dropped when extracting keywords.
+_STOPWORDS = {
+    "a", "an", "the", "and", "or", "of", "for", "with", "in", "on", "to",
+    "my", "me", "i", "im", "looking", "want", "need", "some", "any", "that",
+    "this", "is", "are", "it", "something", "under", "size", "price",
+}
+
+
+def _keywords(text: str) -> list[str]:
+    """Lowercase, split on non-alphanumerics, and drop stopwords / 1-char tokens."""
+    tokens = re.split(r"[^a-z0-9]+", text.lower())
+    return [t for t in tokens if len(t) > 1 and t not in _STOPWORDS]
+
+
+def _size_matches(query_size: str, listing_size: str) -> bool:
+    """
+    Case-insensitive size match. The listing size is split into tokens so a
+    query like "M" matches "S/M" or "M/L" without matching letters buried
+    inside words (e.g. "M" should not match "oversized").
+    """
+    q = query_size.strip().lower()
+    if not q:
+        return True
+    listing = listing_size.lower()
+    tokens = [t for t in re.split(r"[\s/()]+", listing) if t]
+    if q in tokens:
+        return True
+    # Allow multi-character queries to match as a substring (e.g. "xl" in "xl (oversized)").
+    return len(q) >= 2 and q in listing
+
+
+def _score(keywords: list[str], listing: dict) -> int:
+    """
+    Score a listing by how many query keywords appear in its searchable text.
+    Matches in the title and style_tags are weighted higher since they are the
+    strongest relevance signals.
+    """
+    weighted_high = " ".join([
+        listing.get("title", ""),
+        " ".join(listing.get("style_tags", [])),
+    ]).lower()
+    weighted_low = " ".join([
+        listing.get("description", ""),
+        listing.get("category", ""),
+        " ".join(listing.get("colors", [])),
+        listing.get("brand") or "",
+    ]).lower()
+
+    score = 0
+    for kw in keywords:
+        if kw in weighted_high:
+            score += 2
+        elif kw in weighted_low:
+            score += 1
+    return score
+
 
 def search_listings(
     description: str,
@@ -59,18 +117,34 @@ def search_listings(
     Each listing dict has the following fields:
         id, title, description, category, style_tags (list), size,
         condition, price (float), colors (list), brand, platform
-
-    TODO:
-        1. Load all listings with load_listings().
-        2. Filter by max_price and size (if provided).
-        3. Score each remaining listing by keyword overlap with `description`.
-        4. Drop any listings with a score of 0 (no relevant matches).
-        5. Sort by score, highest first, and return the listing dicts.
-
-    Before writing code, fill in the Tool 1 section of planning.md.
     """
-    # Replace this with your implementation
-    return []
+    try:
+        listings = load_listings()
+
+        # 1. Filter by price and size first (cheap, exact constraints).
+        filtered = []
+        for item in listings:
+            if max_price is not None and item.get("price", 0) > max_price:
+                continue
+            if size and not _size_matches(size, item.get("size", "")):
+                continue
+            filtered.append(item)
+
+        # 2. Score remaining listings by keyword overlap with the description.
+        #    The description is the relevance signal — listings that don't match
+        #    it score 0 and are dropped, so a query with no matches (including a
+        #    blank/keyword-less description) naturally returns an empty list.
+        keywords = _keywords(description or "")
+        scored = [(item, _score(keywords, item)) for item in filtered]
+
+        # 3. Drop zero-score listings, then sort by score (desc), price (asc) for ties.
+        matches = [(item, s) for item, s in scored if s > 0]
+        matches.sort(key=lambda pair: (-pair[1], pair[0].get("price", 0)))
+
+        return [item for item, _ in matches]
+    except Exception:
+        # Any unexpected failure (e.g. data load error) returns no results.
+        return []
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -135,3 +209,40 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     """
     # Replace this with your implementation
     return ""
+
+
+# ── Manual tests ──────────────────────────────────────────────────────────────
+# Run each tool in isolation:  .venv/Scripts/python.exe tools.py
+
+def _print_listings(label: str, results: list[dict]) -> None:
+    print(f"=== {label} ({len(results)} results) ===")
+    for r in results[:6]:
+        print(f"  {r['id']}  ${r['price']:<6} {r['size']:<20} {r['title']}")
+    print()
+
+
+if __name__ == "__main__":
+    from utils.data_loader import get_example_wardrobe, get_empty_wardrobe
+
+    # ── Tool 1: search_listings ──
+    print("\n##### search_listings #####\n")
+    _print_listings("vintage graphic tee under $30",
+                    search_listings("vintage graphic tee", max_price=30))
+    _print_listings("90s track jacket, size M",
+                    search_listings("90s track jacket", size="M"))
+    _print_listings("platform sneakers, size 8",
+                    search_listings("platform sneakers", size="8"))
+    _print_listings("no-results test (designer ballgown XXS under $5)",
+                    search_listings("designer ballgown", size="XXS", max_price=5))
+
+    # ── Tool 2: suggest_outfit ── (uncomment once implemented)
+    # print("\n##### suggest_outfit #####\n")
+    # item = search_listings("vintage graphic tee", max_price=30)[0]
+    # print("With example wardrobe:\n", suggest_outfit(item, get_example_wardrobe()), "\n")
+    # print("With empty wardrobe:\n", suggest_outfit(item, get_empty_wardrobe()), "\n")
+
+    # ── Tool 3: create_fit_card ── (uncomment once implemented)
+    # print("\n##### create_fit_card #####\n")
+    # outfit = suggest_outfit(item, get_example_wardrobe())
+    # print(create_fit_card(outfit, item), "\n")
+    # print("Empty outfit guard:\n", create_fit_card("", item), "\n")
