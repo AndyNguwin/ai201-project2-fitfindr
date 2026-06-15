@@ -18,7 +18,16 @@ Usage (once implemented):
     print(result["error"])   # None on success
 """
 
-from tools import search_listings, suggest_outfit, create_fit_card
+import json
+
+from tools import (
+    ERROR_PREFIX,
+    _MODEL,
+    _get_groq_client,
+    create_fit_card,
+    search_listings,
+    suggest_outfit,
+)
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -46,6 +55,68 @@ def _new_session(query: str, wardrobe: dict) -> dict:
 
 
 # ── planning loop ─────────────────────────────────────────────────────────────
+
+def _parse_query(query: str) -> dict:
+    """Use the LLM to extract structured listing search parameters."""
+    prompt = (
+        "Extract the clothing search criteria from the user's message. Return a "
+        "JSON object with exactly these keys: description, size, max_price. "
+        "The description must contain only the item being searched for, without "
+        "requests about styling, outfits, captions, or conversational filler. "
+        "Use null for a missing size or maximum price. max_price must be a number.\n\n"
+        f"User message: {query}"
+    )
+
+    client = _get_groq_client()
+    response = client.chat.completions.create(
+        model=_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "You extract structured search criteria for a fashion app.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0,
+    )
+    content = (response.choices[0].message.content or "").strip()
+    parsed = json.loads(content)
+
+    description = parsed.get("description")
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError("The query did not include an item description.")
+
+    size = parsed.get("size")
+    if size is not None:
+        size = str(size).strip() or None
+
+    max_price = parsed.get("max_price")
+    if max_price is not None:
+        max_price = float(max_price)
+        if max_price < 0:
+            raise ValueError("Maximum price cannot be negative.")
+
+    return {
+        "description": description.strip(),
+        "size": size.upper() if size else None,
+        "max_price": max_price,
+    }
+
+
+def _is_tool_error(result: object) -> bool:
+    """Return True when an LLM-backed tool did not produce usable output."""
+    return (
+        not isinstance(result, str)
+        or not result.strip()
+        or result.strip().startswith(ERROR_PREFIX)
+    )
+
+
+def _print_state(action: str, key: str, value: object) -> None:
+    """Print a labeled session value for tracing state through the agent flow."""
+    print(f"[STATE {action}] session[{key!r}] = {value!r}")
+
 
 def run_agent(query: str, wardrobe: dict) -> dict:
     """
@@ -92,9 +163,76 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     Before writing code, complete the Planning Loop and State Management sections
     of planning.md — your implementation should match what you described there.
     """
-    # TODO: implement the planning loop
     session = _new_session(query, wardrobe)
-    session["error"] = "Planning loop not yet implemented."
+
+    if not isinstance(query, str) or not query.strip():
+        session["error"] = "Please describe the clothing item you want to find."
+        _print_state("UPDATED", "error", session["error"])
+        return session
+
+    try:
+        session["parsed"] = _parse_query(query)
+    except Exception:
+        session["error"] = (
+            "I couldn't understand the item, size, or price in that request. "
+            "Please try rephrasing it."
+        )
+        _print_state("UPDATED", "error", session["error"])
+        return session
+
+    _print_state("UPDATED", "parsed", session["parsed"])
+
+    try:
+        parsed = session["parsed"]
+        _print_state("ACCESSED", "parsed", parsed)
+        session["search_results"] = search_listings(
+            description=parsed["description"],
+            size=parsed["size"],
+            max_price=parsed["max_price"],
+        )
+    except Exception:
+        session["error"] = "I couldn't search the listings right now. Please try again."
+        _print_state("UPDATED", "error", session["error"])
+        return session
+
+    if not session["search_results"]:
+        session["error"] = (
+            "No listings matched your search. Try a different description, size, "
+            "or price limit."
+        )
+        _print_state("UPDATED", "error", session["error"])
+        return session
+
+    session["selected_item"] = session["search_results"][0]
+    _print_state("UPDATED", "selected_item", session["selected_item"])
+
+    try:
+        _print_state("ACCESSED", "selected_item", session["selected_item"])
+        outfit = suggest_outfit(session["selected_item"], session["wardrobe"])
+    except Exception:
+        outfit = None
+    if _is_tool_error(outfit):
+        session["error"] = "I couldn't suggest an outfit right now. Please try again."
+        _print_state("UPDATED", "error", session["error"])
+        return session
+    session["outfit_suggestion"] = outfit.strip()
+    _print_state("UPDATED", "outfit_suggestion", session["outfit_suggestion"])
+
+    try:
+        _print_state("ACCESSED", "outfit_suggestion", session["outfit_suggestion"])
+        _print_state("ACCESSED", "selected_item", session["selected_item"])
+        fit_card = create_fit_card(
+            session["outfit_suggestion"], session["selected_item"]
+        )
+    except Exception:
+        fit_card = None
+    if _is_tool_error(fit_card):
+        session["error"] = "I couldn't create a fit card right now. Please try again."
+        _print_state("UPDATED", "error", session["error"])
+        return session
+    session["fit_card"] = fit_card.strip()
+    _print_state("UPDATED", "fit_card", session["fit_card"])
+
     return session
 
 
@@ -105,7 +243,7 @@ if __name__ == "__main__":
 
     print("=== Happy path: graphic tee ===\n")
     session = run_agent(
-        query="looking for a vintage graphic tee under $30",
+        query="I'm looking for a vintage graphic tee under $30. I mostly wear baggy jeans and chunky sneakers. What's out there and how would I style it?",
         wardrobe=get_example_wardrobe(),
     )
     if session["error"]:

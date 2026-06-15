@@ -86,6 +86,10 @@ You must have at least 3 tools. The three required tools are listed — add any 
 <!-- Describe the logic your planning loop uses. What does it look at? What conditions change its behavior? How does it know when it's done? -->
 
 - Based on the user's message, the agent will decide which tools it needs to use.
+     - The query is parsed by the LLM into a structured dictionary containing only
+       the item description, optional size, and optional maximum price. This avoids
+       relying on a fixed query format and excludes outfit or caption requests from
+       the listing description.
      - Search for an item from a description? `search_listings()`
      - Create an outfit after finding an item? `search_listing()` -> `suggest_outfits()`
      - Make a caption of a created outfit after finding an item to share on social media? `search_listing()` -> `suggest_outfits()` -> `create_fit_card()`
@@ -213,7 +217,7 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 **Milestone 4 — Planning loop and state management:**
 - Planning Loop & State Management:
-     - I'll give Claude my planning.md, specifically the planning loop section to understand the flow and order of tool usage and saved state information, state management section to define the data that will be saved and updated in the session state during the loop, error handling section to properly handle errors or invalid responses gracefully, the docstring of the `run_agent()` function in agent.py, and the architecture diagram to complete the whole understanding of the prior sections mentioned. I expect the run_agent function to handle the described flows, tool usage ordering, and session state managing and return the final response back to the user, gracefully handling any errors. I will then test 3 queries using different wardrobes and item descriptions with this agent's planning loop to view the results of the whole flow.
+     - I'll give Codex my planning.md, specifically the planning loop section to understand the flow and order of tool usage and saved state information, state management section to define the data that will be saved and updated in the session state during the loop, error handling section to properly handle errors or invalid responses gracefully, the docstring of the `run_agent()` function in agent.py, the tools.py to understand the tools, and the architecture diagram to complete the whole understanding of the prior sections mentioned. I expect the run_agent function to handle the described flows, tool usage ordering, and session state managing and return the final response back to the user, gracefully handling any errors. I will then test 3 queries using different wardrobes and item descriptions with this agent's planning loop to view the results of the whole flow.
 ---
 
 ## A Complete Interaction (Step by Step)
