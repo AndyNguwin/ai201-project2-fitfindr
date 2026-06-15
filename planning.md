@@ -95,7 +95,7 @@ You must have at least 3 tools. The three required tools are listed — add any 
 - If asked to suggest/style outfits in the user query, it will then call `suggest_outfits()` after it called `search_listing()`.
      - Before: agent will check the session has a selected item.
      - After: agent will check if the result is empty or not. If the result was empty, it should verify it called the tool correctly and that the empty result is valid. It will recall if it called wrong initially, else it will set the error message for the session and return early. If there are results, it will set the outfit_suggestion in the session as the returned string.
-- If asked to create short and shareable captions of the outfits in the user query, it will then call `screate_fit_card()` after it called `suggest_outfits()`.
+- If asked to create short and shareable captions of the outfits in the user query, it will then call `create_fit_card()` after it called `suggest_outfits()`.
      - Before: agent will check the session has an outfit suggestions.
      - After: agent will check if the result is empty or not. If the result was empty, it should verify it called the tool correctly and that the empty result is valid. It will recall if it called wrong initially, else it will set the error message for the session and return early. If there are results, it will set the fit_card in the session as the returned string.
 - The session will be returned at the end. 
@@ -160,16 +160,27 @@ For each tool, describe the specific failure mode you're handling and what the a
                search -->|"results = [item, ...]"| save_results["search_results = results"]
                save_results --> select["selected_item = search_results[0]"]
 
-               select --> suggest["suggest_outfit(selected_item, wardrobe)"]
-               suggest -->|"wardrobe empty"| tips["styling tips instead of outfit"]
-               suggest -->|"wardrobe has items"| outfit["outfit_suggestion = '...'"]
-               tips --> outfit
+               select --> suggest["suggest_outfit(selected_item, wardrobe)<br/>always returns a string (never raises)"]
+               suggest -->|"wardrobe empty"| tips["styling tips"]
+               suggest -->|"wardrobe has items"| outfit["outfit string"]
+               suggest -->|"LLM gave nothing usable"| errmsg1["error message string"]
+               tips --> check_outfit{"agent: error message<br/>or real result?"}
+               outfit --> check_outfit
+               errmsg1 --> check_outfit
+               check_outfit -->|"error message"| ERR2["set error: 'Couldn't suggest an outfit right now...'"]
+               check_outfit -->|"outfit / tips"| result_set["outfit_suggestion = result"]
 
-               outfit --> fit["create_fit_card(outfit_suggestion, selected_item)"]
-               fit -->|"caption failed / outfit empty"| ERR2["set error: 'Couldn't create a fit card...'"]
-               fit -->|"fit_card = '...'"| DONE[Return session]
+               result_set --> fit["create_fit_card(outfit_suggestion, selected_item)<br/>always returns a string (never raises)"]
+               fit -->|"caption string"| good_card["caption"]
+               fit -->|"LLM gave nothing usable"| errmsg2["error message string"]
+               good_card --> check_card{"agent: error message<br/>or real result?"}
+               errmsg2 --> check_card
+               check_card -->|"error message"| ERR3["set error: 'Couldn't create a fit card...'"]
+               check_card -->|"caption"| set_card["fit_card = result"]
+               set_card --> DONE[Return session]
                ERR --> DONE
                ERR2 --> DONE
+               ERR3 --> DONE
           end
 
           DONE --> result[listing / outfit / fit card → user]
@@ -193,9 +204,16 @@ For each tool, describe the specific failure mode you're handling and what the a
      before trusting it" is a plan. -->
 
 **Milestone 3 — Individual tool implementations:**
+- `search_listings()`: 
+     - I'll give Claude my planning.md, specifically the implementation details of the function in the Tools section, the listings.json to understand the listings schema, the docstring of the function in tools.py, and the architecture diagram to understand how the tool will be connected. I expect the function to filter the listings based on the inputted description, size, and maximum price and return a list of those listings ranked by relevance descendingly. If there are no matches or errors, it should return an empty list. Then I will test with three queries for clothing items and view the results it returns.
+- `suggest_outfits()`: 
+     - I'll give Claude my planning.md, specifically the implementation details of the function in the Tools section, the listings.json to understand the listing schema, the wardrobe_schema.json to understand the schema of a wardrobe, the docstring of the function in tools.py, and the architecture diagram to understand how the tool will be connected. The function needs to first check if the wardrobe is empty or not. If empty, it will give styling tips for the selected item listing rather than suggesting outfits using the wardrobe. If there is a wardrobe, the function format the wardrobe and item listing to prompt an LLM to style an outfit combination. The LLM's response will be returned. If no response was returned or an error, return a descriptive error string. Then I will test with three queries using the wardrobes and an item from the listings and view the results it returns.
+- `create_fit_card()`:
+     - I'll give Claude my planning.md, specifically the implementation details of the function in the Tools section, the listings.json to understand the listing schema, the docstring of the function in tools.py, and the architecture diagram to understand how the tool will be connected. The function should check that the outfit string is not empty, else it will return a descriptive error string instantly. If not, it will build a prompt with the item detail and also the suggested outfit, asking an LLM to create a 2-4 sentence caption. The LLM's response will be returned. If no response was returned or an error, return a descriptive error string. Then I will test with three queries using strings describing an outfit and also an item listing and view the results it returns.
 
 **Milestone 4 — Planning loop and state management:**
-
+- Planning Loop & State Management:
+     - I'll give Claude my planning.md, specifically the planning loop section to understand the flow and order of tool usage and saved state information, state management section to define the data that will be saved and updated in the session state during the loop, error handling section to properly handle errors or invalid responses gracefully, the docstring of the `run_agent()` function in agent.py, and the architecture diagram to complete the whole understanding of the prior sections mentioned. I expect the run_agent function to handle the described flows, tool usage ordering, and session state managing and return the final response back to the user, gracefully handling any errors. I will then test 3 queries using different wardrobes and item descriptions with this agent's planning loop to view the results of the whole flow.
 ---
 
 ## A Complete Interaction (Step by Step)
