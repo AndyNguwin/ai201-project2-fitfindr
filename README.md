@@ -183,6 +183,7 @@ The session state will update/save information after each call as there is an or
 
 - `search_listings` with no result match -> empty list:
     - ![alt text](image-2.png)
+    - ![alt text](image-3.png)
 - `suggest_outfit` with an empty wardrobe -> suggest styling advice:
     - ![alt text](image-1.png)
 - `create_fit_card` with missing outfit input -> descriptive error message:
